@@ -206,6 +206,40 @@
         overflow-wrap: anywhere;
       }
 
+      .range-form {
+        padding-top: 0;
+      }
+
+      .range-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 16px;
+        margin-top: 20px;
+      }
+
+      .range-group {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+        min-width: 0;
+        padding: 12px;
+        border: 1px solid #dedce7;
+        border-radius: 12px;
+      }
+
+      .range-group legend {
+        padding: 0 6px;
+        color: #555365;
+        font-size: 0.86rem;
+        font-weight: 650;
+      }
+
+      @media (max-width: 420px) {
+        .range-grid {
+          grid-template-columns: 1fr;
+        }
+      }
+
       .error {
         color: #a73340;
       }
@@ -246,7 +280,7 @@
     <main>
       <p class="eyebrow">A little math, made clear</p>
       <h1>Factor a<br>polynomial.</h1>
-      <p class="intro">Type a polynomial up to degree 4 to see its factors, or learn when it cannot be factored over the rational numbers.</p>
+      <p class="intro">Factor a polynomial up to degree 4, or explore x⁴ − bx − c across integer ranges for b and c.</p>
 
       <section class="solver" aria-label="Polynomial factorizer">
         <form id="solver-form" novalidate>
@@ -267,6 +301,41 @@
           <h2 class="result-title" id="result-title"></h2>
           <ul class="root-list" id="root-list"></ul>
         </section>
+
+        <form class="range-form" id="range-form" novalidate>
+          <h2 class="section-heading">Factor x⁴ − bx − c over ranges</h2>
+          <p class="hint">Enter inclusive integer ranges for b and c. Every combination will be listed and marked as factorizable or irreducible over the rational numbers. Up to 250 pairs can be calculated at once.</p>
+          <div class="range-grid">
+            <fieldset class="range-group">
+              <legend>b range</legend>
+              <label for="b-min">From
+                <input id="b-min" name="b-min" type="number" step="1" value="-5">
+              </label>
+              <label for="b-max">To
+                <input id="b-max" name="b-max" type="number" step="1" value="5">
+              </label>
+            </fieldset>
+            <fieldset class="range-group">
+              <legend>c range</legend>
+              <label for="c-min">From
+                <input id="c-min" name="c-min" type="number" step="1" value="-5">
+              </label>
+              <label for="c-max">To
+                <input id="c-max" name="c-max" type="number" step="1" value="5">
+              </label>
+            </fieldset>
+          </div>
+          <p class="hint">Bounds must be whole numbers between −1,000,000,000 and 1,000,000,000.</p>
+          <div class="actions">
+            <button class="solve" type="submit">Factor all pairs <span aria-hidden="true">→</span></button>
+          </div>
+        </form>
+
+        <section class="result" id="range-result" aria-live="polite" aria-atomic="true" hidden>
+          <p class="result-label" id="range-result-label">Range factorization</p>
+          <h2 class="result-title" id="range-result-title"></h2>
+          <ul class="root-list" id="range-root-list"></ul>
+        </section>
       </section>
       <footer>Made for curious minds.</footer>
     </main>
@@ -277,6 +346,11 @@
       const resultLabel = document.querySelector("#result-label");
       const resultTitle = document.querySelector("#result-title");
       const rootList = document.querySelector("#root-list");
+      const rangeForm = document.querySelector("#range-form");
+      const rangeResult = document.querySelector("#range-result");
+      const rangeResultLabel = document.querySelector("#range-result-label");
+      const rangeResultTitle = document.querySelector("#range-result-title");
+      const rangeRootList = document.querySelector("#range-root-list");
 
       function showResult(title, details = [], { error = false, label = "Factorization" } = {}) {
         result.hidden = false;
@@ -464,35 +538,34 @@
         return null;
       }
 
-      function factorHigherDegree(coefficients) {
+      function factorIntegerPolynomial(coefficients) {
         if (!coefficients.every(Number.isSafeInteger)) {
-          showResult("Exact factoring through degree 4 currently requires integer coefficients.", [], {
-            error: true,
-            label: "Integer coefficients required",
-          });
-          return;
+          return {
+            error: "Exact factoring through degree 4 currently requires integer coefficients.",
+            errorLabel: "Integer coefficients required",
+          };
         }
         if (coefficients.some((coefficient) => Math.abs(coefficient) > 1_000_000_000)) {
-          showResult("For exact factoring through degree 4, keep each integer coefficient at or below 1,000,000,000 in magnitude.", [], {
-            error: true,
-            label: "Coefficient limit",
-          });
-          return;
+          return {
+            error: "For exact factoring through degree 4, keep each integer coefficient at or below 1,000,000,000 in magnitude.",
+            errorLabel: "Coefficient limit",
+          };
         }
 
         const { content, coefficients: primitive } = primitiveIntegerPolynomial(
           coefficients.map((coefficient) => BigInt(coefficient)),
         );
         if (content === 0n) {
-          showResult("The zero polynomial is already factored.", ["0"]);
-          return;
+          return { factorization: "0", rationallyFactorable: true };
         }
         const factors = [];
+        let rationallyFactorable = false;
         let remaining = primitive;
         while (remaining.length > 3) {
           const root = findRationalRoot(remaining);
           if (!root) break;
           factors.push(formatRationalLinearFactor(root.numerator, root.denominator));
+          rationallyFactorable = true;
           remaining = divideByRationalRoot(remaining, root.numerator, root.denominator);
         }
 
@@ -502,6 +575,7 @@
           const squareRoot = integerSquareRoot(discriminant);
           if (squareRoot !== null) {
             factors.push(formatExactFactorization(a, b, squareRoot, squareRoot === 0n));
+            rationallyFactorable = true;
           } else {
             factors.push(`(${formatIntegerPolynomial(remaining)})`);
           }
@@ -509,6 +583,7 @@
           const pair = findQuadraticPair(remaining);
           if (pair) {
             factors.push(`(${formatIntegerPolynomial(pair[0])})`, `(${formatIntegerPolynomial(pair[1])})`);
+            rationallyFactorable = true;
           } else {
             factors.push(`(${formatIntegerPolynomial(remaining)})`);
           }
@@ -520,12 +595,78 @@
           content === 1n ? "" : content === -1n ? "−" : content.toString(),
           ...factors,
         ].join("");
+        return { factorization, rationallyFactorable };
+      }
+
+      function factorHigherDegree(coefficients) {
+        const result = factorIntegerPolynomial(coefficients);
+        if (result.error) {
+          showResult(result.error, [], {
+            error: true,
+            label: result.errorLabel,
+          });
+          return;
+        }
         showResult(
-          factors.length > 1 ? "The polynomial factors over the rational numbers." : "No further rational factors were found.",
-          [factorization],
+          result.rationallyFactorable ? "The polynomial factors over the rational numbers." : "No further rational factors were found.",
+          [result.factorization],
           { label: "Exact factorization" },
         );
       }
+
+      function showRangeResult(title, details = [], { error = false } = {}) {
+        rangeResult.hidden = false;
+        rangeResultLabel.textContent = error ? "Check your ranges" : "Range factorization";
+        rangeResultTitle.textContent = title;
+        rangeResultTitle.classList.toggle("error", error);
+        rangeRootList.replaceChildren(...details.map((detail) => {
+          const item = document.createElement("li");
+          item.textContent = detail;
+          return item;
+        }));
+      }
+
+      rangeForm.addEventListener("submit", (event) => {
+        event.preventDefault();
+        const names = ["b-min", "b-max", "c-min", "c-max"];
+        const rawValues = names.map((name) => rangeForm.elements.namedItem(name).value.trim());
+        const values = rawValues.map(Number);
+        if (rawValues.some((value) => value === "") || !values.every(Number.isSafeInteger)) {
+          showRangeResult("Enter whole-number bounds for b and c.", [], { error: true });
+          return;
+        }
+
+        const [bMin, bMax, cMin, cMax] = values;
+        if (values.some((value) => Math.abs(value) > 1_000_000_000)) {
+          showRangeResult("Keep each bound between −1,000,000,000 and 1,000,000,000.", [], { error: true });
+          return;
+        }
+        if (bMin > bMax || cMin > cMax) {
+          showRangeResult("Each range's starting value must be less than or equal to its ending value.", [], { error: true });
+          return;
+        }
+
+        const pairCount = (BigInt(bMax) - BigInt(bMin) + 1n) * (BigInt(cMax) - BigInt(cMin) + 1n);
+        if (pairCount > 250n) {
+          showRangeResult("These ranges contain too many pairs. Narrow them to 250 combinations or fewer.", [], { error: true });
+          return;
+        }
+
+        const details = [];
+        for (let b = bMin; b <= bMax; b += 1) {
+          for (let c = cMin; c <= cMax; c += 1) {
+            const factorization = factorIntegerPolynomial([1, 0, 0, -b, -c]);
+            if (factorization.error) {
+              showRangeResult(`Could not factor b = ${b}, c = ${c}: ${factorization.error}`, [], { error: true });
+              return;
+            }
+            const status = factorization.rationallyFactorable ? "factors over Q" : "irreducible over Q";
+            details.push(`b = ${b}, c = ${c}: ${factorization.factorization} (${status})`);
+          }
+        }
+
+        showRangeResult(`Factored ${details.length} coefficient pairs.`, details);
+      });
 
       function gcd(left, right) {
         let a = left < 0n ? -left : left;
