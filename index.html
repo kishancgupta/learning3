@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="theme-color" content="#f6f4ef">
-    <title>Quadratic — Equation Solver</title>
+    <title>Polynomial Factorizer</title>
     <style>
       :root {
         color-scheme: light;
@@ -70,31 +70,6 @@
         box-shadow: 0 24px 70px rgba(47, 38, 94, 0.09);
       }
 
-      .equation {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 0.28em;
-        padding: 30px 16px;
-        border-bottom: 1px solid var(--line);
-        background: #fbfaff;
-        color: #343149;
-        font-family: Georgia, "Times New Roman", serif;
-        font-size: clamp(1.55rem, 6vw, 2.35rem);
-        letter-spacing: -0.045em;
-      }
-
-      .equation sup {
-        position: relative;
-        top: -0.32em;
-        margin-left: -0.2em;
-        font-size: 0.58em;
-      }
-
-      .equation .term {
-        white-space: nowrap;
-      }
-
       form,
       .result {
         padding: 30px;
@@ -104,12 +79,6 @@
         margin: 0 0 20px;
         font-size: 1rem;
         font-weight: 700;
-      }
-
-      .coefficients {
-        display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 16px;
       }
 
       label {
@@ -137,6 +106,11 @@
       input:focus {
         border-color: var(--purple);
         box-shadow: 0 0 0 3px rgba(102, 84, 223, 0.15);
+      }
+
+      .polynomial-input {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: 1.15rem;
       }
 
       .hint {
@@ -253,10 +227,6 @@
           padding: 24px 20px;
         }
 
-        .coefficients {
-          gap: 10px;
-        }
-
         input {
           padding: 12px 10px;
         }
@@ -275,44 +245,25 @@
   <body>
     <main>
       <p class="eyebrow">A little math, made clear</p>
-      <h1>Quadratic<br>solver.</h1>
-      <p class="intro">Find the roots of an equation in the form <strong>ax² + bx + c = 0</strong>. Enter its coefficients to see a step-free answer, including complex roots when needed.</p>
+      <h1>Factor a<br>polynomial.</h1>
+      <p class="intro">Type a polynomial up to degree 4 to see its factors, or learn when it cannot be factored over the rational numbers.</p>
 
-      <section class="solver" aria-label="Quadratic equation solver">
-        <div class="equation" aria-label="a x squared plus b x plus c equals zero">
-          <span class="term">ax<sup>2</sup></span>
-          <span>+</span>
-          <span class="term">bx</span>
-          <span>+</span>
-          <span class="term">c</span>
-          <span>= 0</span>
-        </div>
-
+      <section class="solver" aria-label="Polynomial factorizer">
         <form id="solver-form" novalidate>
-          <h2 class="section-heading">Enter your coefficients</h2>
-          <div class="coefficients">
-            <label for="coefficient-a">
-              <span>Coefficient a</span>
-              <input id="coefficient-a" name="a" type="number" step="any" value="1" inputmode="decimal">
-            </label>
-            <label for="coefficient-b">
-              <span>Coefficient b</span>
-              <input id="coefficient-b" name="b" type="number" step="any" value="-5" inputmode="decimal">
-            </label>
-            <label for="coefficient-c">
-              <span>Coefficient c</span>
-              <input id="coefficient-c" name="c" type="number" step="any" value="6" inputmode="decimal">
-            </label>
-          </div>
-          <p class="hint">The leading coefficient <em>a</em> can be zero; in that case, the equation is solved as a linear equation.</p>
+          <h2 class="section-heading">Enter a polynomial</h2>
+          <label for="polynomial-input">
+            <span>Polynomial in x</span>
+            <input class="polynomial-input" id="polynomial-input" name="polynomial" type="text" value="x^2 - 5x + 6" placeholder="For example: x^2 - 5x + 6" autocomplete="off" spellcheck="false" aria-describedby="polynomial-hint">
+          </label>
+          <p class="hint" id="polynomial-hint">Enter a polynomial up to degree 4, such as <em>x^4 - 5x^2 + 4</em>. Use ^2, ^3, ^4 or superscripts; integer coefficients give exact rational factors.</p>
           <div class="actions">
-            <button class="solve" type="submit">Solve equation <span aria-hidden="true">→</span></button>
+            <button class="solve" type="submit">Factor polynomial <span aria-hidden="true">→</span></button>
             <button class="reset" id="reset-button" type="reset">Reset</button>
           </div>
         </form>
 
         <section class="result" id="result" aria-live="polite" aria-atomic="true" hidden>
-          <p class="result-label" id="result-label">Your result</p>
+          <p class="result-label" id="result-label">Factorization</p>
           <h2 class="result-title" id="result-title"></h2>
           <ul class="root-list" id="root-list"></ul>
         </section>
@@ -327,14 +278,14 @@
       const resultTitle = document.querySelector("#result-title");
       const rootList = document.querySelector("#root-list");
 
-      function showResult(title, roots = [], { error = false, label = "Your result" } = {}) {
+      function showResult(title, details = [], { error = false, label = "Factorization" } = {}) {
         result.hidden = false;
         resultLabel.textContent = label;
         resultTitle.textContent = title;
         resultTitle.classList.toggle("error", error);
-        rootList.replaceChildren(...roots.map((root) => {
+        rootList.replaceChildren(...details.map((detail) => {
           const item = document.createElement("li");
-          item.textContent = root;
+          item.textContent = detail;
           return item;
         }));
       }
@@ -344,42 +295,364 @@
         return Number(value.toPrecision(10)).toString();
       }
 
-      function showCalculationLimit() {
-        showResult("These coefficients are too large to calculate safely. Try smaller values.", [], {
-          error: true,
-          label: "Calculation limit",
+      function parsePolynomial(expression) {
+        const input = expression.replace(/\s+/g, "").replace(/[−–]/g, "-").replace(/[²³⁴]/g, (power) => `^${"²³⁴".indexOf(power) + 2}`);
+        if (!input) return { error: "Enter a polynomial in x." };
+
+        const coefficients = [0, 0, 0, 0, 0];
+        let position = 0;
+        let terms = 0;
+
+        while (position < input.length) {
+          let sign = 1;
+          if (input[position] === "+" || input[position] === "-") {
+            if (input[position] === "-") sign = -1;
+            position += 1;
+          } else if (terms > 0) {
+            return { error: "Separate polynomial terms with + or −." };
+          }
+
+          const remaining = input.slice(position);
+          const variableTerm = remaining.match(/^((?:\d+(?:\.\d*)?|\.\d+)?)(?:\*)?x(?:\^(\d+|[234]))?/i);
+          if (variableTerm) {
+            const degree = variableTerm[2] === undefined ? 1 : Number(variableTerm[2]);
+            if (degree > 4) return { error: "This factorizer supports polynomials up to degree 4." };
+            const coefficient = variableTerm[1] === "" ? 1 : Number(variableTerm[1]);
+            if (!Number.isFinite(coefficient)) return { error: "Use finite numeric coefficients." };
+            coefficients[degree] += sign * coefficient;
+            position += variableTerm[0].length;
+          } else {
+            const constantTerm = remaining.match(/^(\d+(?:\.\d*)?|\.\d+)/);
+            if (!constantTerm) return { error: "Enter a valid polynomial using numbers, x, +, −, and ^2." };
+            coefficients[0] += sign * Number(constantTerm[1]);
+            position += constantTerm[0].length;
+          }
+
+          if (!coefficients.every(Number.isFinite)) {
+            return { error: "Use finite numeric coefficients." };
+          }
+          terms += 1;
+        }
+
+        return { coefficients };
+      }
+
+      function integerDivisors(value) {
+        const number = value < 0n ? -value : value;
+        if (number === 0n) return [0n];
+        const divisors = [];
+        for (let candidate = 1n; candidate * candidate <= number; candidate += 1n) {
+          if (number % candidate === 0n) {
+            divisors.push(candidate);
+            if (candidate * candidate !== number) divisors.push(number / candidate);
+          }
+        }
+        return divisors;
+      }
+
+      function formatIntegerPolynomial(coefficients) {
+        const degree = coefficients.length - 1;
+        const terms = [];
+        coefficients.forEach((coefficient, index) => {
+          if (coefficient === 0n) return;
+          const power = degree - index;
+          const absolute = coefficient < 0n ? -coefficient : coefficient;
+          const variable = power === 0 ? "" : power === 1 ? "x" : `x^${power}`;
+          const magnitude = power > 0 && absolute === 1n ? "" : absolute.toString();
+          const term = `${magnitude}${variable}`;
+          if (terms.length === 0) {
+            terms.push(coefficient < 0n ? `−${term}` : term);
+          } else {
+            terms.push(`${coefficient < 0n ? " − " : " + "}${term}`);
+          }
         });
+        return terms.join("") || "0";
+      }
+
+      function primitiveIntegerPolynomial(coefficients) {
+        let content = coefficients.reduce((divisor, coefficient) => gcd(divisor, coefficient), 0n);
+        if (content === 0n) return { content: 0n, coefficients: [0n] };
+        const primitive = coefficients.map((coefficient) => coefficient / content);
+        if (primitive[0] < 0n) {
+          content = -content;
+          primitive.forEach((coefficient, index) => { primitive[index] = -coefficient; });
+        }
+        return { content, coefficients: primitive };
+      }
+
+      function divideByRationalRoot(coefficients, numerator, denominator) {
+        const quotient = [coefficients[0] / denominator];
+        if (coefficients[0] % denominator !== 0n) return null;
+        for (let index = 1; index < coefficients.length - 1; index += 1) {
+          const value = coefficients[index] + numerator * quotient[index - 1];
+          if (value % denominator !== 0n) return null;
+          quotient.push(value / denominator);
+        }
+        const remainder = coefficients[coefficients.length - 1] + numerator * quotient[quotient.length - 1];
+        if (remainder !== 0n) return null;
+        return primitiveIntegerPolynomial(quotient).coefficients;
+      }
+
+      function findRationalRoot(coefficients) {
+        const constant = coefficients[coefficients.length - 1];
+        if (constant === 0n) return { numerator: 0n, denominator: 1n };
+        const numerators = integerDivisors(constant);
+        const denominators = integerDivisors(coefficients[0]);
+        for (const numeratorMagnitude of numerators) {
+          for (const denominator of denominators) {
+            if (denominator === 0n) continue;
+            for (const sign of [1n, -1n]) {
+              const numerator = numeratorMagnitude * sign;
+              if (gcd(numerator, denominator) !== 1n) continue;
+              if (divideByRationalRoot(coefficients, numerator, denominator)) {
+                return { numerator, denominator };
+              }
+            }
+          }
+        }
+        return null;
+      }
+
+      function formatRationalLinearFactor(numerator, denominator) {
+        const divisor = gcd(numerator, denominator);
+        const p = numerator / divisor;
+        const q = denominator / divisor;
+        const coefficient = q < 0n ? -q : q;
+        const constant = p < 0n ? -p : p;
+        const xTerm = coefficient === 1n ? "x" : `${coefficient}x`;
+        if (p === 0n) return "x";
+        return p < 0n ? `(${xTerm} + ${constant})` : `(${xTerm} − ${constant})`;
+      }
+
+      function findQuadraticPair(coefficients) {
+        const [a, b, c, d, e] = coefficients;
+        for (const u of integerDivisors(a).flatMap((value) => [value, -value])) {
+          if (u === 0n || a % u !== 0n) continue;
+          const r = a / u;
+          for (const w of integerDivisors(e).flatMap((value) => [value, -value])) {
+            if (w === 0n || e % w !== 0n) continue;
+            const t = e / w;
+            const determinant = u * t - r * w;
+            let candidates = [];
+            if (determinant !== 0n) {
+              const sNumerator = b * t - r * d;
+              const vNumerator = u * d - w * b;
+              if (sNumerator % determinant === 0n && vNumerator % determinant === 0n) {
+                candidates.push([vNumerator / determinant, sNumerator / determinant]);
+              }
+            } else if (b * w === d * u) {
+              const discriminant = b * b - 4n * r * u * (c - 2n * w * r);
+              const squareRoot = integerSquareRoot(discriminant);
+              if (squareRoot !== null) {
+                for (const numerator of [b + squareRoot, b - squareRoot]) {
+                  const denominator = 2n * r;
+                  if (denominator !== 0n && numerator % denominator === 0n) {
+                    const v = numerator / denominator;
+                    const sNumerator = b - r * v;
+                    if (sNumerator % u === 0n) candidates.push([v, sNumerator / u]);
+                  }
+                }
+              }
+            }
+
+            for (const [v, s] of candidates) {
+              if (u * s + v * r !== b || v * s + u * t + w * r !== c || v * t + w * s !== d) continue;
+              return [[u, v, w], [r, s, t]];
+            }
+          }
+        }
+        return null;
+      }
+
+      function factorHigherDegree(coefficients) {
+        if (!coefficients.every(Number.isSafeInteger)) {
+          showResult("Exact factoring through degree 4 currently requires integer coefficients.", [], {
+            error: true,
+            label: "Integer coefficients required",
+          });
+          return;
+        }
+        if (coefficients.some((coefficient) => Math.abs(coefficient) > 1_000_000_000)) {
+          showResult("For exact factoring through degree 4, keep each integer coefficient at or below 1,000,000,000 in magnitude.", [], {
+            error: true,
+            label: "Coefficient limit",
+          });
+          return;
+        }
+
+        const { content, coefficients: primitive } = primitiveIntegerPolynomial(
+          coefficients.map((coefficient) => BigInt(coefficient)),
+        );
+        if (content === 0n) {
+          showResult("The zero polynomial is already factored.", ["0"]);
+          return;
+        }
+        const factors = [];
+        let remaining = primitive;
+        while (remaining.length > 3) {
+          const root = findRationalRoot(remaining);
+          if (!root) break;
+          factors.push(formatRationalLinearFactor(root.numerator, root.denominator));
+          remaining = divideByRationalRoot(remaining, root.numerator, root.denominator);
+        }
+
+        if (remaining.length === 3) {
+          const [a, b, c] = remaining;
+          const discriminant = b * b - 4n * a * c;
+          const squareRoot = integerSquareRoot(discriminant);
+          if (squareRoot !== null) {
+            factors.push(formatExactFactorization(a, b, squareRoot, squareRoot === 0n));
+          } else {
+            factors.push(`(${formatIntegerPolynomial(remaining)})`);
+          }
+        } else if (remaining.length === 5) {
+          const pair = findQuadraticPair(remaining);
+          if (pair) {
+            factors.push(`(${formatIntegerPolynomial(pair[0])})`, `(${formatIntegerPolynomial(pair[1])})`);
+          } else {
+            factors.push(`(${formatIntegerPolynomial(remaining)})`);
+          }
+        } else if (remaining.length > 1) {
+          factors.push(`(${formatIntegerPolynomial(remaining)})`);
+        }
+
+        const factorization = [
+          content === 1n ? "" : content === -1n ? "−" : content.toString(),
+          ...factors,
+        ].join("");
+        showResult(
+          factors.length > 1 ? "The polynomial factors over the rational numbers." : "No further rational factors were found.",
+          [factorization],
+          { label: "Exact factorization" },
+        );
+      }
+
+      function gcd(left, right) {
+        let a = left < 0n ? -left : left;
+        let b = right < 0n ? -right : right;
+        while (b !== 0n) [a, b] = [b, a % b];
+        return a;
+      }
+
+      function integerSquareRoot(value) {
+        if (value < 0n) return null;
+        if (value < 2n) return value;
+        let current = value;
+        let next = (current + 1n) / 2n;
+        while (next < current) {
+          current = next;
+          next = (current + value / current) / 2n;
+        }
+        return current * current === value ? current : null;
+      }
+
+      function formatFraction(numerator, denominator) {
+        let top = numerator;
+        let bottom = denominator;
+        if (bottom < 0n) {
+          top = -top;
+          bottom = -bottom;
+        }
+        const divisor = gcd(top, bottom);
+        top /= divisor;
+        bottom /= divisor;
+        if (bottom === 1n) return top.toString();
+        return `${top}/${bottom}`;
+      }
+
+      function factorForRoot(numerator, denominator = 1n) {
+        if (numerator === 0n) return "x";
+        const absoluteRoot = formatFraction(
+          numerator < 0n ? -numerator : numerator,
+          denominator < 0n ? -denominator : denominator,
+        );
+        const negativeRoot = (numerator < 0n) !== (denominator < 0n);
+        return negativeRoot ? `(x + ${absoluteRoot})` : `(x − ${absoluteRoot})`;
+      }
+
+      function formatLeadingFactor(value) {
+        if (value === 1n) return "";
+        if (value === -1n) return "−";
+        return value.toString();
+      }
+
+      function formatExactFactorization(a, b, squareRoot, repeated) {
+        const denominator = 2n * a;
+        const firstRoot = -b + squareRoot;
+        const first = factorForRoot(firstRoot, denominator);
+        if (repeated) return `${formatLeadingFactor(a)}${first}²`;
+        const second = factorForRoot(-b - squareRoot, denominator);
+        return `${formatLeadingFactor(a)}${first}${second}`;
+      }
+
+      function formatApproximateFactorization(a, roots) {
+        const leading = formatNumber(a);
+        const prefix = leading === "1" ? "" : leading === "-1" ? "−" : leading;
+        const factors = roots.map((root) => {
+          if (root === 0) return "x";
+          const absoluteRoot = formatNumber(Math.abs(root));
+          return root < 0 ? `(x + ${absoluteRoot})` : `(x − ${absoluteRoot})`;
+        });
+        if (roots[0] === roots[1]) return `${prefix}${factors[0]}²`;
+        return `${prefix}${factors.join("")}`;
+      }
+
+      function getRealRoots(a, b, c, discriminant) {
+        if (discriminant === 0) {
+          const root = -b / (2 * a);
+          return [root, root];
+        }
+        const squareRoot = Math.sqrt(discriminant);
+        const q = -0.5 * (b + Math.sign(b || 1) * squareRoot);
+        return q === 0 ? [-b / (2 * a), -b / (2 * a)] : [q / a, c / q];
       }
 
       form.addEventListener("submit", (event) => {
         event.preventDefault();
-        const values = ["a", "b", "c"].map((name) => {
-          const input = form.elements.namedItem(name);
-          return input.value.trim() === "" ? NaN : input.valueAsNumber;
-        });
-        const [a, b, c] = values;
-
-        if (!values.every(Number.isFinite)) {
-          showResult("Enter a valid, finite number for each coefficient.", [], { error: true, label: "Check your input" });
+        const parsed = parsePolynomial(form.elements.namedItem("polynomial").value);
+        if (parsed.error) {
+          showResult(parsed.error, [], { error: true, label: "Check your input" });
           return;
         }
+        const degree = parsed.coefficients.findLastIndex((coefficient) => coefficient !== 0);
+        if (degree < 0 || degree === 0) {
+          showResult("A constant polynomial has no variable factors.", [formatNumber(parsed.coefficients[0])], {
+            label: "Constant polynomial",
+          });
+          return;
+        }
+        if (degree <= 2) {
+          return factorQuadratic(
+            parsed.coefficients[2] || 0,
+            parsed.coefficients[1] || 0,
+            parsed.coefficients[0] || 0,
+          );
+        }
+        return factorHigherDegree(parsed.coefficients.slice(0, degree + 1).reverse());
+      });
 
+      function factorQuadratic(a, b, c) {
+        const values = [a, b, c];
+
+        const allIntegers = values.every(Number.isSafeInteger);
         if (a === 0) {
           if (b === 0) {
-            showResult(
-              c === 0 ? "Every value of x is a solution." : "This equation has no solution.",
-              [],
-              { label: "Linear equation" },
-            );
+            showResult(c === 0 ? "The zero polynomial is already factored." : "This nonzero constant cannot be factored further.", [formatNumber(c)], {
+              label: "Constant polynomial",
+            });
             return;
           }
-
-          const root = -c / b;
-          if (!Number.isFinite(root)) {
-            showCalculationLimit();
+          if (allIntegers) {
+            const divisor = gcd(BigInt(b), BigInt(c));
+            const factor = divisor || 1n;
+            const innerB = BigInt(b) / factor;
+            const innerC = BigInt(c) / factor;
+            const constant = innerC === 0n ? "" : innerC > 0n ? ` + ${innerC}` : ` − ${-innerC}`;
+            const inner = innerB === 1n ? "x" : innerB === -1n ? "−x" : `${innerB}x`;
+            showResult("Factored into its numerical and linear factors.", [`${formatLeadingFactor(factor)}(${inner}${constant})`]);
             return;
           }
-          showResult("This is a linear equation with one solution.", [`x = ${formatNumber(root)}`], { label: "Linear equation" });
+          showResult("This is a linear polynomial.", [`${formatNumber(b)}x ${c < 0 ? "−" : "+"} ${formatNumber(Math.abs(c))}`]);
           return;
         }
 
@@ -387,51 +660,62 @@
         const scaledA = a / scale;
         const scaledB = b / scale;
         const scaledC = c / scale;
-        const discriminant = scaledB * scaledB - 4 * scaledA * scaledC;
-        const rawDiscriminant = b * b - 4 * a * c;
-        const discriminantLabel = Number.isFinite(rawDiscriminant)
-          ? `Discriminant: ${formatNumber(rawDiscriminant)}`
-          : `Discriminant is ${discriminant > 0 ? "positive" : discriminant < 0 ? "negative" : "zero"} (scaled calculation)`;
-
-        if (discriminant > 0) {
-          const squareRoot = Math.sqrt(discriminant);
-          const q = -0.5 * (scaledB + Math.sign(scaledB || 1) * squareRoot);
-          const roots = q === 0
-            ? [-scaledB / (2 * scaledA), -scaledB / (2 * scaledA)]
-            : [q / scaledA, scaledC / q];
-          if (!roots.every(Number.isFinite)) {
-            showCalculationLimit();
+        const exactDiscriminant = allIntegers
+          ? BigInt(b) * BigInt(b) - 4n * BigInt(a) * BigInt(c)
+          : null;
+        const discriminant = allIntegers
+          ? Number(exactDiscriminant) / (scale * scale)
+          : scaledB * scaledB - 4 * scaledA * scaledC;
+        if (discriminant < 0) {
+          const realPart = -scaledB / (2 * scaledA);
+          const imaginaryPart = Math.sqrt(-discriminant) / Math.abs(2 * scaledA);
+          if (!Number.isFinite(realPart) || !Number.isFinite(imaginaryPart)) {
+            showResult("These coefficients are too large to factor safely. Try smaller values.", [], { error: true, label: "Calculation limit" });
             return;
           }
-          showResult("The equation has two distinct real roots.", roots.map((root, index) => `x${index + 1} = ${formatNumber(root)}`), {
-            label: discriminantLabel,
-          });
+          const leading = formatNumber(a);
+          const realTerm = realPart === 0 ? "x" : `(x − ${formatNumber(realPart)})`;
+          const imaginarySquare = formatNumber(imaginaryPart * imaginaryPart);
+          const completedSquare = `${realTerm}² + ${imaginarySquare}`;
+          const factorization = a === 1
+            ? completedSquare
+            : a === -1
+              ? `−(${completedSquare})`
+              : `${leading}[${completedSquare}]`;
+          showResult("This quadratic is irreducible over the real numbers.", [
+            factorization,
+            "It has a pair of complex conjugate roots.",
+          ], { label: "Real-number factorization" });
           return;
         }
 
-        if (discriminant === 0) {
-          const root = -scaledB / (2 * scaledA);
-          if (!Number.isFinite(root)) {
-            showCalculationLimit();
+        const roots = getRealRoots(scaledA, scaledB, scaledC, discriminant);
+        if (!roots.every(Number.isFinite)) {
+          showResult("These coefficients are too large to factor safely. Try smaller values.", [], { error: true, label: "Calculation limit" });
+          return;
+        }
+
+        if (allIntegers) {
+          const exactA = BigInt(a);
+          const exactB = BigInt(b);
+          const exactSquareRoot = integerSquareRoot(exactDiscriminant);
+          if (exactSquareRoot !== null) {
+            showResult("The polynomial factors over the rational numbers.", [
+              formatExactFactorization(exactA, exactB, exactSquareRoot, exactSquareRoot === 0n),
+            ], { label: "Exact factorization" });
             return;
           }
-          showResult("The equation has one repeated real root.", [`x = ${formatNumber(root)}`], {
-            label: discriminantLabel,
-          });
+          showResult("This quadratic is irreducible over the rational numbers.", [
+            `Approximate real factorization: ${formatApproximateFactorization(a, roots)}`,
+          ], { label: "Approximate real factors" });
           return;
         }
 
-        const realPart = -scaledB / (2 * scaledA);
-        const imaginaryPart = Math.sqrt(-discriminant) / Math.abs(2 * scaledA);
-        if (!Number.isFinite(realPart) || !Number.isFinite(imaginaryPart)) {
-          showCalculationLimit();
-          return;
-        }
-        showResult("The equation has two complex conjugate roots.", [
-          `x1 = ${formatNumber(realPart)} + ${formatNumber(imaginaryPart)}i`,
-          `x2 = ${formatNumber(realPart)} − ${formatNumber(imaginaryPart)}i`,
-        ], { label: discriminantLabel });
-      });
+        showResult("Approximate real factorization.", [
+          formatApproximateFactorization(a, roots),
+          "Use integer coefficients for an exact rational factorization.",
+        ], { label: "Approximate factors" });
+      }
 
       form.addEventListener("reset", () => {
         result.hidden = true;
